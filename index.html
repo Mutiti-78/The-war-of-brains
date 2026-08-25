@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport"
+      content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Beyin Kart Savaşı V9</title>
+
+<style>
+*{box-sizing:border-box}
+html,body{
+    margin:0;
+    width:100%;
+    height:100%;
+    overflow:hidden;
+    background:#111;
+    font-family:Arial,sans-serif;
+    touch-action:none;
+}
+#game{
+    position:fixed;
+    inset:0;
+}
+canvas{
+    display:block;
+    width:100%;
+    height:100%;
+}
+#ui{
+    position:fixed;
+    inset:0;
+    pointer-events:none;
+}
+.hidden{display:none!important}
+
+#woodBox{
+    position:absolute;
+    top:15px;
+    left:50%;
+    transform:translateX(-50%);
+    width:220px;
+    height:35px;
+    border:3px solid #4a2814;
+    border-radius:12px;
+    background:#222;
+    overflow:hidden;
+}
+#woodFill{
+    width:40%;
+    height:100%;
+    background:linear-gradient(#d99a42,#8a4e1d);
+}
+#woodText{
+    position:absolute;
+    inset:0;
+    text-align:center;
+    line-height:29px;
+    color:white;
+    font-weight:bold;
+    text-shadow:0 2px 2px #000;
+}
+
+#deck{
+    position:absolute;
+    bottom:12px;
+    left:50%;
+    transform:translateX(-50%);
+    display:flex;
+    gap:8px;
+    pointer-events:auto;
+}
+.card{
+    width:78px;
+    height:92px;
+    border:3px solid white;
+    border-radius:12px;
+    background:rgba(25,25,25,.92);
+    color:white;
+    text-align:center;
+    padding:4px;
+    box-shadow:0 4px 12px #000;
+    cursor:pointer;
+}
+.card.selected{
+    transform:translateY(-10px);
+    border-color:#ffd83d;
+}
+.card .emoji{font-size:32px}
+.card .name{font-size:12px;font-weight:bold}
+.card .cost{font-size:12px;color:#e7b15d}
+
+#joy{
+    position:absolute;
+    left:25px;
+    bottom:125px;
+    width:120px;
+    height:120px;
+    border:3px solid rgba(255,255,255,.45);
+    border-radius:50%;
+    background:rgba(255,255,255,.08);
+    pointer-events:auto;
+}
+#stick{
+    position:absolute;
+    width:48px;
+    height:48px;
+    left:33px;
+    top:33px;
+    border-radius:50%;
+    background:rgba(255,255,255,.45);
+}
+
+#battleBtn,#lobbyBtn{
+    position:absolute;
+    right:20px;
+    bottom:25px;
+    pointer-events:auto;
+    padding:15px 25px;
+    border:0;
+    border-radius:14px;
+    background:#e4a52c;
+    color:#241707;
+    font-weight:bold;
+    font-size:16px;
+}
+#lobbyBtn{display:none;background:#58c96b}
+
+#message{
+    position:absolute;
+    top:65px;
+    left:50%;
+    transform:translateX(-50%);
+    color:white;
+    font-size:17px;
+    font-weight:bold;
+    text-shadow:0 2px 4px #000;
+}
+
+#result{
+    position:absolute;
+    left:50%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    background:rgba(0,0,0,.9);
+    color:white;
+    padding:35px;
+    border-radius:20px;
+    text-align:center;
+    display:none;
+    pointer-events:auto;
+}
+#result button{
+    margin-top:20px;
+    padding:12px 24px;
+    border:0;
+    border-radius:10px;
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div id="game"></div>
+
+<div id="ui">
+
+    <div id="woodBox">
+        <div id="woodFill"></div>
+        <div id="woodText">🪵 4 / 10</div>
+    </div>
+
+    <div id="message">Lobi</div>
+
+    <div id="deck"></div>
+
+    <div id="joy">
+        <div id="stick"></div>
+    </div>
+
+    <button id="battleBtn">⚔️ SAVAŞ ALANINA GİT</button>
+    <button id="lobbyBtn">🏠 LOBİYE DÖN</button>
+
+    <div id="result">
+        <h1 id="resultTitle"></h1>
+        <p id="resultText"></p>
+        <button id="resultBtn">Devam Et</button>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+/* =========================================================
+   BEYİN KART SAVAŞI V9
+   ========================================================= */
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x79c8f0);
+
+const camera = new THREE.PerspectiveCamera(
+    65,
+    innerWidth / innerHeight,
+    0.1,
+    500
+);
+
+const renderer = new THREE.WebGLRenderer({
+    antialias:true
+});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.setSize(innerWidth,innerHeight);
+document.getElementById("game").appendChild(renderer.domElement);
+
+scene.add(new THREE.HemisphereLight(0xffffff,0x5d8050,2));
+
+const sun = new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(20,35,15);
+scene.add(sun);
+
+/* -------------------------
+   VERİLER
+------------------------- */
+
+const cards = {
+    mushroom:{
+        name:"Mantar",
+        emoji:"🍄",
+        cost:2,
+        hp:3,
+        damage:2,
+        interval:1000,
+        speed:3,
+        color:0xd94a43
+    },
+    rose:{
+        name:"Gül",
+        emoji:"🌹",
+        cost:3,
+        hp:5,
+        damage:4,
+        interval:2000,
+        speed:3.7,
+        color:0xe53935
+    },
+    daisy:{
+        name:"Papatya",
+        emoji:"🌼",
+        cost:5,
+        hp:7,
+        damage:5,
+        interval:2000,
+        speed:4.5,
+        color:0xffffff
+    },
+    tulip:{
+        name:"Lale",
+        emoji:"🌷",
+        cost:7,
+        hp:7,
+        damage:7,
+        interval:3000,
+        speed:2.2,
+        color:0xff4c73
+    },
+    cactus:{
+        name:"Kaktüs",
+        emoji:"🌵",
+        cost:4,
+        hp:3,
+        damage:4,
+        interval:500,
+        speed:2.8,
+        color:0x38a85b
+    },
+    clover:{
+        name:"Yonca",
+        emoji:"🍀",
+        cost:2,
+        hp:2,
+        damage:1,
+        interval:1000,
+        speed:5.2,
+        color:0x36b95b
+    },
+    palm:{
+        name:"Palmiye",
+        emoji:"🌴",
+        cost:5,
+        hp:8,
+        damage:0,
+        interval:999999,
+        speed:0,
+        color:0x39a85c
+    },
+    pea:{
+        name:"Bezelye",
+        emoji:"🫛",
+        cost:5,
+        hp:2,
+        damage:3,
+        interval:1000,
+        speed:2.7,
+        color:0x65bd40,
+        ranged:true
+    },
+    cress:{
+        name:"Tere",
+        emoji:"🫚",
+        cost:3,
+        hp:1,
+        damage:8,
+        interval:500,
+        speed:6,
+        color:0x69a94b
+    }
+};
+
+/* Başlangıçta üç kart */
+let deck = ["mushroom","rose","clover"];
+
+/* Rakip güç seviyesi */
+let enemyLevel = Number(localStorage.getItem("brainEnemyLevel") || 0);
+
+/* Oyuncunun odunu */
+let wood = 4;
+const MAX_WOOD = 10;
+
+/* Beyin canları */
+const MAX_BRAIN_HP = 100;
+let playerBrainHP = MAX_BRAIN_HP;
+let enemyBrainHP = MAX_BRAIN_HP;
+
+let mode = "lobby";
+let units = [];
+let enemyUnits = [];
+
+let lastTime = performance.now();
+let woodTimer = 0;
+let enemyWoodTimer = 0;
+
+/* -------------------------
+   ZEMİN
+------------------------- */
+
+function box(w,h,d,color,x,y,z){
+    const m = new THREE.Mesh(
+        new THREE.BoxGeometry(w,h,d),
+        new THREE.MeshStandardMaterial({color})
+    );
+    m.position.set(x,y,z);
+    scene.add(m);
+    return m;
+}
+
+const lobbyGround = box(
+    100,1,100,
+    0x55a84d,
+    0,-0.5,0
+);
+
+/* -------------------------
+   BASİT AĞAÇ
+------------------------- */
+
+function tree(x,z){
+    const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(.5,.7,4,8),
+        new THREE.MeshStandardMaterial({color:0x704322})
+    );
+    trunk.position.set(x,2,z);
+    scene.add(trunk);
+
+    const top = new THREE.Mesh(
+        new THREE.SphereGeometry(2.3,10,8),
+        new THREE.MeshStandardMaterial({color:0x237a36})
+    );
+    top.position.set(x,5,z);
+    scene.add(top);
+}
+
+/* -------------------------
+   LOBİ KART BULMA ALANI
+------------------------- */
+
+tree(-12,-8);
+tree(10,-10);
+tree(18,5);
+tree(-18,9);
+
+function flower(x,z,type){
+    const g = new THREE.Group();
+
+    const stem = new THREE.Mesh(
+        new THREE.CylinderGeometry(.08,.08,.7,6),
+        new THREE.MeshStandardMaterial({color:0x258c39})
+    );
+    stem.position.y=.35;
+    g.add(stem);
+
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(.35,8,8),
+        new THREE.MeshStandardMaterial({
+            color:cards[type].color
+        })
+    );
+    head.position.y=.8;
+    g.add(head);
+
+    g.position.set(x,0,z);
+    scene.add(g);
+    return g;
+}
+
+/* Kartların lobi konumları daha saklı */
+flower(-10,-5,"rose");
+flower(4,-13,"daisy");
+flower(15,3,"tulip");
+flower(-4,8,"cactus");
+flower(20,-5,"clover");
+flower(8,8,"palm");
+flower(-15,5,"pea");
+flower(3,14,"cress");
+
+/* -------------------------
+   SAVAŞ ALANI
+------------------------- */
+
+let battleObjects = [];
+
+function clearBattle(){
+    battleObjects.forEach(o=>scene.remove(o));
+    battleObjects=[];
+}
+
+function createBattlefield(){
+
+    clearBattle();
+
+    const field = box(
+        50,1,32,
+        0x58a950,
+        0,-.5,0
+    );
+    battleObjects.push(field);
+
+    const river = box(
+        6,.2,32,
+        0x3b9ed0,
+        0,.05,0
+    );
+    battleObjects.push(river);
+
+    const bridge1 = box(
+        8,.5,7,
+        0x8a5a32,
+        0,.3,-9
+    );
+    const bridge2 = box(
+        8,.5,7,
+        0x8a5a32,
+        0,.3,9
+    );
+
+    battleObjects.push(bridge1,bridge2);
+
+    /* Oyuncu ve rakip tarafları */
+    const pSide = box(
+        20,.2,32,
+        0x65b95d,
+        -15,.1,0
+    );
+
+    const eSide = box(
+        20,.2,32,
+        0xb95b5b,
+        15,.1,0
+    );
+
+    battleObjects.push(pSide,eSide);
+}
+
+/* -------------------------
+   BEYİN KARAKTERİ
+------------------------- */
+
+function createBrain(color){
+
+    const g = new THREE.Group();
+
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(1.25,24,16),
+        new THREE.MeshStandardMaterial({
+            color:color
+        })
+    );
+    head.scale.set(1,1.05,.9);
+    head.position.y=2.3;
+    g.add(head);
+
+    /* normal gülen yüz */
+    const eyeMat = new THREE.MeshBasicMaterial({color:0x111111});
+
+    [-.38,.38].forEach(x=>{
+        const eye = new THREE.Mesh(
+            new THREE.SphereGeometry(.12,8,8),
+            eyeMat
+        );
+        eye.position.set(x,2.5,.98);
+        g.add(eye);
+    });
+
+    const smile = new THREE.Mesh(
+        new THREE.TorusGeometry(.35,.055,8,16,Math.PI),
+        eyeMat
+    );
+    smile.rotation.x=Math.PI/2;
+    smile.position.set(0,2.05,1.02);
+    g.add(smile);
+
+    /* gövde */
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2,1.3,.8),
+        new THREE.MeshStandardMaterial({color:color})
+    );
+    body.position.y=1;
+    g.add(body);
+
+    /* kollar */
+    const armL = new THREE.Mesh(
+        new THREE.BoxGeometry(.3,1.1,.3),
+        new THREE.MeshStandardMaterial({color:color})
+    );
+    armL.position.set(-.85,1,0);
+    g.add(armL);
+
+    const armR = armL.clone();
+    armR.position.x=.85;
+    g.add(armR);
+
+    /* bacaklar */
+    const legL = new THREE.Mesh(
+        new THREE.BoxGeometry(.35,1,.35),
+        new THREE.MeshStandardMaterial({color:color})
+    );
+    legL.position.set(-.35,-.05,0);
+    g.add(legL);
+
+    const legR=legL.clone();
+    legR.position.x=.35;
+    g.add(legR);
+
+    return g;
+}
+
+let playerBrain, enemyBrain;
+
+/* -------------------------
+   KART KARAKTERİ
+------------------------- */
+
+function createUnit(type,isEnemy=false){
+
+    const data=cards[type];
+
+    const g=new THREE.Group();
+
+    const body=new THREE.Mesh(
+        new THREE.SphereGeometry(.7,12,10),
+        new THREE.MeshStandardMaterial({
+            color:data.color
+        })
+    );
+    body.position.y=1.1;
+    g.add(body);
+
+    /* karaktere göre basit model */
+    if(type==="cactus"){
+        for(let i=0;i<3;i++){
+            const arm=new THREE.Mesh(
+                new THREE.BoxGeometry(.25,.65,.25),
+                new THREE.MeshStandardMaterial({color:0x29994a})
+            );
+            arm.position.set(i===0?-0.7:0.7,1.1,0);
+            g.add(arm);
+        }
+    }
+
+    if(type==="palm"){
+        const trunk=new THREE.Mesh(
+            new THREE.CylinderGeometry(.2,.25,2.2,8),
+            new THREE.MeshStandardMaterial({color:0x704321})
+        );
+        trunk.position.y=1.2;
+        g.add(trunk);
+
+        const leaves=new THREE.Mesh(
+            new THREE.SphereGeometry(1.1,8,5),
+            new THREE.MeshStandardMaterial({color:0x2c9b4c})
+        );
+        leaves.position.y=2.5;
+        leaves.scale.set(1.5,.4,1.5);
+        g.add(leaves);
+    }
+
+    /* bacaklar */
+    const leg1=new THREE.Mesh(
+        new THREE.BoxGeometry(.18,.65,.18),
+        new THREE.MeshStandardMaterial({color:data.color})
+    );
+    leg1.position.set(-.25,.35,0);
+    g.add(leg1);
+
+    const leg2=leg1.clone();
+    leg2.position.x=.25;
+    g.add(leg2);
+
+    g.userData={
+        type,
+        enemy:isEnemy,
+        hp:data.hp*(isEnemy ? 1+enemyLevel*.12 : 1),
+        maxHp:data.hp*(isEnemy ? 1+enemyLevel*.12 : 1),
+        damage:data.damage*(isEnemy ? 1+enemyLevel*.08 : 1),
+        lastAttack:0,
+        speed:data.speed
+    };
+
+    return g;
+}
+
+/* -------------------------
+   OYUN BAŞLAT
+------------------------- */
+
+function startBattle(){
+
+    if(deck.length<3){
+        alert("Savaşmak için 3 kartlık desten hazır olmalı!");
+        return;
+    }
+
+    mode="battle";
+
+    document.getElementById("battleBtn").style.display="none";
+    document.getElementById("lobbyBtn").style.display="block";
+    document.getElementById("message").textContent=
+        "⚔️ SAVAŞ! Rakip beyni yok et!";
+
+    document.getElementById("deck").style.display="flex";
+
+    createBattlefield();
+
+    playerBrain=createBrain(0x8c6cff);
+    enemyBrain=createBrain(0xff625f);
+
+    playerBrain.position.set(-18,0,0);
+    enemyBrain.position.set(18,0,0);
+
+    scene.add(playerBrain);
+    scene.add(enemyBrain);
+
+    playerBrainHP=MAX_BRAIN_HP;
+    enemyBrainHP=MAX_BRAIN_HP;
+
+    wood=5;
+
+    updateWood();
+
+    /* Kamera savaş alanına */
+    camera.position.set(0,25,30);
+    camera.lookAt(0,0,0);
+
+    units=[];
+    enemyUnits=[];
+
+    /* Rakip artık bizimkinden daha hızlı odun kazanıyor */
+    enemyWoodTimer=0;
+}
+
+/* -------------------------
+   KART KOY
+------------------------- */
+
+function playCard(type){
+
+    if(mode!=="battle") return;
+
+    const data=cards[type];
+
+    if(wood<data.cost){
+        return;
+    }
+
+    wood-=data.cost;
+    updateWood();
+
+    const u=createUnit(type,false);
+
+    /* bizim taraf */
+    u.position.set(
+        -10 + Math.random()*4,
+        0,
+        -12 + Math.random()*24
+    );
+
+    scene.add(u);
+    units.push(u);
+}
+
+/* -------------------------
+   RAKİP KARTI
+------------------------- */
+
+function enemyPlay(){
+
+    if(mode!=="battle") return;
+
+    const available=Object.keys(cards)
+        .filter(k=>cards[k].cost<=enemyWood);
+
+    if(!available.length) return;
+
+    /* Rakip de zamanla daha güçlü kartları kullanabilir */
+    let choices=available;
+
+    if(enemyLevel>=2){
+        choices=available.filter(k=>cards[k].cost<=7);
+    }
+
+    const type=choices[
+        Math.floor(Math.random()*choices.length)
+    ];
+
+    enemyWood-=cards[type].cost;
+
+    const u=createUnit(type,true);
+
+    u.position.set(
+        10 + Math.random()*3,
+        0,
+        -12 + Math.random()*24
+    );
+
+    scene.add(u);
+    enemyUnits.push(u);
+}
+
+/* -------------------------
+   HASAR
+------------------------- */
+
+function attackUnit(attacker,target){
+
+    const d=attacker.userData;
+    const now=performance.now();
+
+    if(now-d.lastAttack<cards[d.type].interval)
+        return;
+
+    d.lastAttack=now;
+
+    target.userData.hp-=d.damage;
+
+    if(target.userData.hp<=0){
+        scene.remove(target);
+
+        const arr=target.userData.enemy?
+            enemyUnits:units;
+
+        const i=arr.indexOf(target);
+
+        if(i>=0) arr.splice(i,1);
+    }
+}
+
+function attackBrain(attacker,brain,isEnemyBrain){
+
+    const d=attacker.userData;
+    const now=performance.now();
+
+    if(now-d.lastAttack<cards[d.type].interval)
+        return;
+
+    d.lastAttack=now;
+
+    if(isEnemyBrain){
+        enemyBrainHP-=d.damage;
+    }else{
+        playerBrainHP-=d.damage;
+    }
+
+    checkBattleEnd();
+}
+
+/* -------------------------
+   SAVAŞ AI
+------------------------- */
+
+function updateUnits(dt){
+
+    /* bizim karakterler */
+    units.slice().forEach(u=>{
+
+        if(!u.parent) return;
+
+        let target=null;
+        let closest=999;
+
+        enemyUnits.forEach(e=>{
+            const dist=u.position.distanceTo(e.position);
+            if(dist<closest){
+                closest=dist;
+                target=e;
+            }
+        });
+
+        if(target){
+
+            if(closest>2){
+                const dir=new THREE.Vector3()
+                    .subVectors(target.position,u.position)
+                    .normalize();
+
+                u.position.addScaledVector(
+                    dir,
+                    u.userData.speed*dt
+                );
+            }else{
+                attackUnit(u,target);
+            }
+
+        }else{
+
+            /* düşman kalmadıysa beyne git */
+            const dist=u.position.distanceTo(enemyBrain.position);
+
+            if(dist>2.5){
+                const dir=new THREE.Vector3()
+                    .subVectors(enemyBrain.position,u.position)
+                    .normalize();
+
+                u.position.addScaledVector(
+                    dir,
+                    u.userData.speed*dt
+                );
+            }else{
+                attackBrain(u,enemyBrain,true);
+            }
+        }
+    });
+
+    /* rakip */
+    enemyUnits.slice().forEach(u=>{
+
+        if(!u.parent) return;
+
+        let target=null;
+        let closest=999;
+
+        units.forEach(e=>{
+            const dist=u.position.distanceTo(e.position);
+            if(dist<closest){
+                closest=dist;
+                target=e;
+            }
+        });
+
+        if(target){
+
+            if(closest>2){
+                const dir=new THREE.Vector3()
+                    .subVectors(target.position,u.position)
+                    .normalize();
+
+                u.position.addScaledVector(
+                    dir,
+                    u.userData.speed*dt
+                );
+            }else{
+                attackUnit(u,target);
+            }
+
+        }else{
+
+            const dist=u.position.distanceTo(playerBrain.position);
+
+            if(dist>2.5){
+                const dir=new THREE.Vector3()
+                    .subVectors(playerBrain.position,u.position)
+                    .normalize();
+
+                u.position.addScaledVector(
+                    dir,
+                    u.userData.speed*dt
+                );
+            }else{
+                attackBrain(u,playerBrain,false);
+            }
+        }
+    });
+}
+
+/* -------------------------
+   MAÇ SONU
+------------------------- */
+
+function checkBattleEnd(){
+
+    if(mode!=="battle") return;
+
+    if(enemyBrainHP<=0){
+        finishBattle(true);
+    }
+
+    if(playerBrainHP<=0){
+        finishBattle(false);
+    }
+}
+
+function finishBattle(win){
+
+    mode="result";
+
+    if(win){
+
+        /* Her galibiyette rakip güçleniyor */
+        enemyLevel++;
+
+        localStorage.setItem(
+            "brainEnemyLevel",
+            enemyLevel
+        );
+
+        document.getElementById("resultTitle").textContent=
+            "🏆 KAZANDIN!";
+
+        document.getElementById("resultText").textContent=
+            "Rakip güç seviyesi: "+enemyLevel+
+            " • Sonraki savaş daha zor olacak!";
+    }else{
+
+        document.getElementById("resultTitle").textContent=
+            "💥 KAYBETTİN!";
+
+        document.getElementById("resultText").textContent=
+            "Tekrar deneyebilirsin.";
+    }
+
+    document.getElementById("result").style.display="block";
+}
+
+/* -------------------------
+   LOBİYE DÖN
+------------------------- */
+
+function goLobby(){
+
+    mode="lobby";
+
+    clearBattle();
+
+    if(playerBrain) scene.remove(playerBrain);
+    if(enemyBrain) scene.remove(enemyBrain);
+
+    units.forEach(u=>scene.remove(u));
+    enemyUnits.forEach(u=>scene.remove(u));
+
+    units=[];
+    enemyUnits=[];
+
+    wood=4;
+    updateWood();
+
+    document.getElementById("battleBtn").style.display="block";
+    document.getElementById("lobbyBtn").style.display="none";
+    document.getElementById("message").textContent="🏠 Lobi";
+
+    document.getElementById("result").style.display="none";
+
+    camera.position.set(0,18,27);
+    camera.lookAt(0,0,0);
+}
+
+/* -------------------------
+   ODUN
+------------------------- */
+
+function updateWood(){
+
+    const fill=
+        Math.max(0,Math.min(1,wood/MAX_WOOD))*100;
+
+    document.getElementById("woodFill").style.width=
+        fill+"%";
+
+    document.getElementById("woodText").textContent=
+        "🪵 "+Math.floor(wood)+" / "+MAX_WOOD;
+}
+
+/* -------------------------
+   KART UI
+------------------------- */
+
+function buildDeck(){
+
+    const deckEl=document.getElementById("deck");
+    deckEl.innerHTML="";
+
+    deck.forEach(type=>{
+
+        const c=cards[type];
+
+        const el=document.createElement("div");
+        el.className="card";
+
+        el.innerHTML=`
+            <div class="emoji">${c.emoji}</div>
+            <div class="name">${c.name}</div>
+            <div class="cost">🪵 ${c.cost}</div>
+        `;
+
+        el.onclick=()=>{
+
+            document.querySelectorAll(".card")
+                .forEach(x=>x.classList.remove("selected"));
+
+            el.classList.add("selected");
+
+            playCard(type);
+        };
+
+        deckEl.appendChild(el);
+    });
+}
+
+buildDeck();
+updateWood();
+
+/* -------------------------
+   JOYSTICK
+   Doğru yön:
+   sağ = sağ
+   sol = sol
+   yukarı = ileri
+   aşağı = geri
+------------------------- */
+
+const joy=document.getElementById("joy");
+const stick=document.getElementById("stick");
+
+let joyActive=false;
+let joyX=0;
+let joyY=0;
+
+function joystickMove(clientX,clientY){
+
+    const r=joy.getBoundingClientRect();
+
+    let x=clientX-(r.left+r.width/2);
+    let y=clientY-(r.top+r.height/2);
+
+    const max=45;
+    const len=Math.sqrt(x*x+y*y);
+
+    if(len>max){
+        x=x/len*max;
+        y=y/len*max;
+    }
+
+    stick.style.transform=
+        `translate(${x}px,${y}px)`;
+
+    joyX=x/max;
+    joyY=y/max;
+}
+
+joy.addEventListener("pointerdown",e=>{
+    joyActive=true;
+    joy.setPointerCapture(e.pointerId);
+    joystickMove(e.clientX,e.clientY);
+});
+
+joy.addEventListener("pointermove",e=>{
+    if(joyActive)
+        joystickMove(e.clientX,e.clientY);
+});
+
+joy.addEventListener("pointerup",()=>{
+    joyActive=false;
+    joyX=0;
+    joyY=0;
+    stick.style.transform="translate(0,0)";
+});
+
+/* -------------------------
+   KAMERA
+------------------------- */
+
+let cameraYaw=0;
+
+renderer.domElement.addEventListener(
+    "pointermove",
+    e=>{
+
+        if(mode!=="battle") return;
+
+        if(e.buttons===1 &&
+           e.clientX>160){
+
+            cameraYaw-=e.movementX*0.005;
+
+            camera.position.x=
+                Math.sin(cameraYaw)*30;
+
+            camera.position.z=
+                Math.cos(cameraYaw)*30;
+
+            camera.lookAt(0,0,0);
+        }
+    }
+);
+
+/* -------------------------
+   BUTONLAR
+------------------------- */
+
+document.getElementById("battleBtn")
+    .onclick=startBattle;
+
+document.getElementById("lobbyBtn")
+    .onclick=goLobby;
+
+document.getElementById("resultBtn")
+    .onclick=goLobby;
+
+/* -------------------------
+   ANA DÖNGÜ
+------------------------- */
+
+function animate(now){
+
+    requestAnimationFrame(animate);
+
+    const dt=Math.min(
+        (now-lastTime)/1000,
+        .05
+    );
+
+    lastTime=now;
+
+    if(mode==="battle"){
+
+        /* Bizim odun: her saniye */
+        woodTimer+=dt;
+
+        if(woodTimer>=1){
+
+            woodTimer=0;
+
+            if(wood<MAX_WOOD)
+                wood++;
+
+            updateWood();
+        }
+
+        /*
+          RAKİP:
+          Bizden daha hızlı.
+          0.65 saniyede bir +1 odun.
+        */
+        enemyWoodTimer+=dt;
+
+        if(enemyWoodTimer>=.65){
+
+            enemyWoodTimer=0;
+
+            if(enemyWood<MAX_WOOD)
+                enemyWood++;
+        }
+
+        /*
+          Rakip kartları kendi gizli odunundan
+          harcar.
+        */
+        if(enemyWood>=2 &&
+           Math.random()<dt*.55){
+
+            enemyPlay();
+        }
+
+        updateUnits(dt);
+
+        /* Hafif yürüme animasyonu */
+        [...units,...enemyUnits].forEach(u=>{
+            if(u.parent){
+
+                u.rotation.z=
+                    Math.sin(now*.008)*.05;
+
+                u.position.y=
+                    Math.abs(Math.sin(now*.008))*0.05;
+            }
+        });
+    }
+
+    renderer.render(scene,camera);
+}
+
+requestAnimationFrame(animate);
+
+/* -------------------------
+   PENCERE BOYUTU
+------------------------- */
+
+addEventListener("resize",()=>{
+
+    camera.aspect=
+        innerWidth/innerHeight;
+
+    camera.updateProjectionMatrix();
+
+    renderer.setSize(
+        innerWidth,
+        innerHeight
+    );
+});
+
+/* Başlangıç kamerası */
+camera.position.set(0,18,27);
+camera.lookAt(0,0,0);
+
+</script>
+</body>
+  </html>
